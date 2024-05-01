@@ -1,0 +1,32 @@
+{% extends "base.html" %} {% block content %} {% for message in
+    get_flashed_messages()%}
+    <div class="alert alert-primary alert-dismissible fade show" role="alert">
+      {{message}}
+      <button
+        type="button"
+        class="btn-close"
+        data-bs-dismiss="alert"
+        aria-label="Close"
+      ></button>
+    </div>
+    
+    {% endfor%}
+    <h1>Blog Posts</h1></br>
+    <table class="table table-bordered border-primary">
+    
+        {% for category in categories %}
+            <tr> 
+                <td>
+                    <small>By: {{category.categorier.name}}
+                    -Title : {{category.title}}.
+                    -Category : {{category.category}}
+                    -Date : {{category.date_posted}} 
+                    -Content :{{category.content}}
+                    -Url :{{category.url}}
+                    
+                </td>
+                </br>
+            </tr>    
+        {% endfor %}
+    </table>
+    {%endblock%}
