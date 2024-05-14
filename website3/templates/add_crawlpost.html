@@ -28,9 +28,7 @@
                     <small>By: {{ category.categorier.name }}
                     -Title : <a href="" class="categoryTitleLink" data-title="{{ category.title }}">{{ category.title }}</a>
                     -Category : {{ category.category }}
-                    -Date : {{ category.date_posted }} 
-                    -Content : {{ category.content }}
-                    -Url : {{ category.url }}
+                  
                     <a href="{{ url_for('delete_category', id = category.id) }}" class="btn btn-outline-danger btn-sm">Delete Category</a>
                 </td>
             </tr>  

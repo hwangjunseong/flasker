@@ -14,7 +14,14 @@
 <h1>Blog Posts</h1></br>
  
 <div class="shadow p-3 mb-5 bg-body-tertiary rounded">
-    
+
+  <div class="col-12">
+    {% if post.post_pic %}
+      <img src="{{url_for('static', filename='images/'+post.post_pic)}}" width="200" align = "right">
+    {% else %}
+      <img src="{{url_for('static', filename='images/default.png')}}" width="200" align = "right">
+    {% endif %}
+  </div>
   <small>By: {{post.poster.name}}<br/>
     {{post.category}}</small><br/>
     <h2>{{post.title}}</h2><br/>

@@ -17,11 +17,21 @@ get_flashed_messages()%}
 <div class="shadow p-3 mb-5 bg-body-tertiary rounded">
 
     <h2><a href="{{url_for('post', id = post.id)}}" class = "btn btn-outline-secondary btn-sm">{{post.title}}</a></h2><br/>
+
+    <div class="col-12">
+      {% if post.post_pic %}
+        <img src="{{url_for('static', filename='images/'+post.post_pic)}}" width="200" align = "right">
+      {% else %}
+        <img src="{{url_for('static', filename='images/default.png')}}" width="200" align = "right">
+      {% endif %}
+
+    </div>
     <small>By: {{post.poster.name}}<br/>
     Date : {{post.date_posted}}</small><br/>
     url : <a href={{post.url}}>{{post.url}}</a></small><br/>
     category : {{post.category}}</small><br/>
     <p>Content : {{post.content}}</p><br/>
+    
     <a href="{{url_for('post', id = post.id)}}" class = "btn btn-outline-success btn-sm">View Post</a>
   
 
@@ -36,3 +46,4 @@ get_flashed_messages()%}
     </div>
 {% endfor %}
 {%endblock%}
+

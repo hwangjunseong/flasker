@@ -1,4 +1,4 @@
-from flask import Flask, render_template, flash, request, redirect, url_for
+from flask import Flask, render_template, flash, request, redirect, url_for, current_app
 # from flask_wtf import FlaskForm
 # from wtforms import StringField, SubmitField, PasswordField, BooleanField, ValidationError
 # from wtforms.validators import DataRequired, EqualTo, Length
@@ -16,6 +16,9 @@ import json
 import requests
 from bs4 import BeautifulSoup
 
+from werkzeug.utils import secure_filename
+import uuid as uuid
+import os
 
 # from sqlalchemy.dialects.mysql import pymysql
 #create a flask instance
@@ -29,6 +32,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:wktong6877@localho
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 #secret key
 app.config['SECRET_KEY'] = "abcd"
+
+#저장할 폴더이름
+UPLOAD_FOLDER = 'static/images/'
+app.config['UPLOAD_FOLDER'] =UPLOAD_FOLDER
+
 #initialize the database
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -86,6 +94,7 @@ class Posts(db.Model):
     date_posted = db.Column(db.DateTime, default=func.now())
     category = db.Column(db.String(255)) #category
     url =  db.Column(db.String(255))
+    post_pic = db.Column(db.String(255), nullable=True)
     #create foreign key to link users -> users의 id -> 한명의 유저가 여러가지 post 가지기 가능 
     poster_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     
@@ -96,6 +105,7 @@ class Categories(db.Model):
     date_posted = db.Column(db.DateTime, default=func.now())
     category=db.Column(db.String(255))
     url =  db.Column(db.String(255))
+    category_pic = db.Column(db.String(255), nullable=True)
     categorier_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
 #title content date_posted_ category url current user id
@@ -149,7 +159,7 @@ def add_crawlpost():
             #title content category url
             #title content date_posted category url
 
-            post = Posts(title = OldCategory.title, content = OldCategory.content, category = OldCategory.category, url = OldCategory.url, poster_id = poster)
+            post = Posts(title = OldCategory.title, content = OldCategory.content, category = OldCategory.category, url = OldCategory.url,post_pic =OldCategory.category_pic, poster_id = poster)
             #양식 초기화
             form.title.data = ''
             
@@ -167,6 +177,14 @@ def delete_categories(id):
         
     # 사용자와 관련된 카테고리 삭제
     for category in user_to_delete.categories:
+        # 카테고리와 관련된 이미지 파일이 포스트에 없을 때만 삭제
+        post_exist = Posts.query.filter_by(post_pic=category.category_pic).first()
+        if category.category_pic and post_exist is None:
+            file_path = os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], category.category_pic)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+              
+     
         db.session.delete(category)
     db.session.commit()
     flash("All categories have been removed!")
@@ -178,13 +196,21 @@ def delete_categories(id):
 @login_required
 def delete_category(id):
     category_to_delete = Categories.query.get_or_404(id)
-   
+    post_exist = Posts.query.filter_by(post_pic=category_to_delete.category_pic).first()
+    
     id = current_user.id
 
     # category id -> user의 id와 일치하는 id만 delete할수있다
     if id == category_to_delete.categorier_id:
 
         try:
+            #post에 pic없는거만 사진 삭제
+            if category_to_delete.category_pic and post_exist is None:
+              
+                file_path = os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], category_to_delete.category_pic)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+  
             db.session.delete(category_to_delete)
             db.session.commit()
             flash("Category deleted successfully")
@@ -204,12 +230,15 @@ def delete_category(id):
 def posts():
     #데이터베이스로부터 모든 포스트 grab -> 날짜순 정렬된거 기준으로
     posts = Posts.query.order_by(Posts.date_posted)
+
     return render_template("posts.html", posts=posts)
 
 #개인의 post id로 블로그 봄
 @app.route("/posts/<int:id>")
 def post(id):
     post = Posts.query.get_or_404(id)
+
+    
     return render_template("post.html", post=post)
 
 
@@ -221,7 +250,6 @@ def edit_post(id):
     form = PostForm()
     if form.validate_on_submit():
         post.title = form.title.data
-        # post.author = form.author.data
         post.category = form.category.data
         post.content = form.content.data
         #update data base
@@ -234,7 +262,6 @@ def edit_post(id):
         # return redirect(url_for('malu', id=post.id))
     if current_user.id == post.poster_id:
         form.title.data = post.title
-        # form.author.data = post.author
         form.category.data = post.category
         form.content.data = post.content
         return render_template('edit_post.html',form=form)
@@ -255,6 +282,10 @@ def delete_post(id):
     if id == post_to_delete.poster_id:
 
         try:
+            if post_to_delete.post_pic:
+                file_path = os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], post_to_delete.post_pic)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
             db.session.delete(post_to_delete)
             db.session.commit()
             flash("Post deleted successfully")
@@ -317,6 +348,8 @@ def update(id):
     else:
         return render_template('update.html', form=form, name_to_update=name_to_update, id = id)
 
+
+
 @app.route('/delete/<int:id>', methods=['GET', 'POST'])
 def delete(id):
     user_to_delete = Users.query.get_or_404(id)
@@ -330,6 +363,11 @@ def delete(id):
 
         # 사용자와 관련된 카테고리 삭제
         for category in user_to_delete.categories:
+            # 카테고리와 관련된 이미지 파일 삭제
+            if category.category_pic:
+                file_path = os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], category.category_pic)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
             db.session.delete(category)
 
         db.session.delete(user_to_delete)
@@ -349,7 +387,6 @@ def delete(id):
 def index():
     
     return render_template('index.html')
-
 def start_crawling(category_url, category_name):
     response = requests.get(category_url)
     response.raise_for_status()
@@ -363,8 +400,12 @@ def start_crawling(category_url, category_name):
         title = article.select_one('a.news_tit').text
         url = article.select_one('a.news_tit')['href']
         content = article.select_one('a.api_txt_lines.dsc_txt_wrap').text
-        announcements.append({'title': title, 'url': url, 'content': content})
-    #img = soup.find('a', class_='dsc_thumb')
+        img_el = article.select_one('a.dsc_thumb img')
+        img_url = img_el['data-lazysrc']
+       
+        # .png로 저장해야함
+        announcements.append({'title': title, 'url': url, 'content': content, 'img_url': img_url})
+
 
 
 
@@ -372,7 +413,7 @@ def start_crawling(category_url, category_name):
 
     #유효성 검사 title, url, content category 중 none없어야함
     for  ann in announcements:
-        if ann['title']=='' or ann['url'] =='' or ann['content']=='' or category_name is None:
+        if ann['title']=='' or ann['url'] =='' or ann['content']=='' or ann['img_url']==''or category_name is None:
             flash('ann empty error') 
         else:
             #title이 데이터 베이스에 동일한게 존재하는지 확인하고 없다면 넣는다
@@ -381,12 +422,28 @@ def start_crawling(category_url, category_name):
 
             if oldcategory is None:
             #고유하다면 데이터배이스에 추가 category title content url
-                #categorier = current_user.id
+           
                 #title content date_posted_ category url current user id
+
+                response_img = requests.get(ann['img_url'])
+                response_img.raise_for_status()
+
+                upload_folder = os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'])
+                #Grab image name
+                pic_filename = secure_filename(category_name)+ '.png'
+                #set uuid
+                pic_name = str(uuid.uuid1()) + '_'+pic_filename
+                #save the image
                 
-                category = Categories( title = ann['title'], content = ann['content'] , category = category_name, url = ann['url'] ,categorier_id = categorier)
+                pic_path = os.path.join(upload_folder, pic_name)
+                with open(pic_path, 'wb') as f:
+                    f.write(response_img.content)
+             
+
+                category = Categories( title = ann['title'], content = ann['content'] , category = category_name, url = ann['url'] ,category_pic = pic_name , categorier_id = categorier)
                 db.session.add(category)
                 db.session.commit()
+
 
 
 
@@ -406,7 +463,7 @@ def crawling():
             #여기에서 카테고리에 따른 search할꺼임 -> 정보 뽑고 카테코리 데이터베이스에 저장할꺼임
             url = {
                 'Stock': 'https://search.naver.com/search.naver?ssc=tab.news.all&where=news&sm=tab_jum&query=%EC%A3%BC%EC%8B%9D',
-                'Sport': 'https://search.naver.com/search.naver?ssc=tab.news.all&where=news&sm=tab_jum&query=%EC%95%BC%EA%B5%AC',
+                'Sport': 'https://search.naver.com/search.naver?sm=tab_hty.top&where=news&ssc=tab.news.all&query=%EC%8A%A4%ED%8F%AC%EC%B8%A0&oquery=%EC%95%BC%EA%B5%AC&tqi=iBGz%2BdpzL8VssFnYRF0ssssstts-197829',
                 'Music':  'https://search.naver.com/search.naver?sm=tab_hty.top&where=news&ssc=tab.news.all&query=%EC%9D%8C%EC%95%85&oquery=%EC%A3%BC%EC%8B%9D&tqi=iBd0bwqpsECsstqwpshssssssLl-167263',
             }
             category_url = url[category_name]
@@ -453,7 +510,6 @@ def logout():
 @app.route('/dashboard',methods=['GET', 'POST'])
 @login_required
 def dashboard():
-    form = UserForm()
     id = current_user.id
     name_to_update = Users.query.get_or_404(id)
     if request.method == "POST":
@@ -463,12 +519,12 @@ def dashboard():
         try:
             db.session.commit()
             flash("User updated successfully")
-            return render_template('dashboard.html', form=form, name_to_update=name_to_update)
+            return render_template('dashboard.html')
         except:
             flash("User updated failed")
-            return render_template('dashboard.html', form=form, name_to_update=name_to_update)
+            return render_template('dashboard.html')
     else:
-        return render_template('dashboard.html', form=form, name_to_update=name_to_update, id = id)
+        return render_template('dashboard.html')
    
 
 
@@ -481,9 +537,6 @@ def page_not_found(e):
 @app.errorhandler(500)
 def page_not_found(e):
     return render_template('500.html'), 500
-
-
-
 
 
 
